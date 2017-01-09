@@ -1,46 +1,17 @@
 'use strict';
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const auth = require('basic-auth');
+const SonosSystem = require('sonos-discovery');
+const logger = require('sonos-discovery/lib/helpers/logger');
+const SonosHttpAPI = require('./lib/sonos-http-api.js');
+const nodeStatic = require('node-static');
+const settings = require('./settings');
 
-var http = require('http');
-var https = require('https');
-var auth = require('basic-auth');
-var SonosDiscovery = require('sonos-discovery');
-var SonosHttpAPI = require('./lib/sonos-http-api.js');
-var nodeStatic = require('node-static');
-var fs = require('fs');
-var path = require('path');
-var webroot = path.resolve(__dirname, 'static');
-
-var settings = {
-  port: 5005,
-  securePort: 5006,
-  cacheDir: './cache',
-  webroot: webroot
-};
-
-// Create webroot + tts if not exist
-if (!fs.existsSync(webroot)) {
-  fs.mkdirSync(webroot);
-}
-if (!fs.existsSync(webroot + '/tts/')) {
-  fs.mkdirSync(webroot + '/tts/');
-}
-
-// load user settings
-try {
-  var userSettings = require(path.resolve(__dirname, 'settings.json'));
-} catch (e) {
-  console.log('no settings file found, will only use default settings');
-}
-
-if (userSettings) {
-  for (var i in userSettings) {
-    settings[i] = userSettings[i];
-  }
-}
-
-var fileServer = new nodeStatic.Server(webroot);
-var discovery = new SonosDiscovery(settings);
-var api = new SonosHttpAPI(discovery, settings);
+const fileServer = new nodeStatic.Server(settings.webroot);
+const discovery = new SonosSystem(settings);
+const api = new SonosHttpAPI(discovery, settings);
 
 var requestHandler = function (req, res) {
   req.addListener('end', function () {
@@ -63,6 +34,18 @@ var requestHandler = function (req, res) {
         }
       }
 
+      // Enable CORS requests
+      res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      if (req.headers['access-control-request-headers']) {
+        res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers']);
+      }
+
+      if (req.method === 'OPTIONS') {
+        res.end();
+        return;
+      }
+
       if (req.method === 'GET') {
         api.requestHandler(req, res);
       }
@@ -70,7 +53,7 @@ var requestHandler = function (req, res) {
   }).resume();
 };
 
-var server;
+let server;
 
 if (settings.https) {
   var options = {};
@@ -81,20 +64,36 @@ if (settings.https) {
     options.key = fs.readFileSync(settings.https.key);
     options.cert = fs.readFileSync(settings.https.cert);
   } else {
-    console.error("Insufficient configuration for https");
+    logger.error("Insufficient configuration for https");
     return;
   }
 
-  var secureServer = https.createServer(options, requestHandler);
+  const secureServer = https.createServer(options, requestHandler);
   secureServer.listen(settings.securePort, function () {
-    console.log('https server listening on port', settings.securePort);
+    logger.info('https server listening on port', settings.securePort);
   });
 }
 
 server = http.createServer(requestHandler);
 
+process.on('unhandledRejection', (err) => {
+  logger.error(err);
+});
+
 server.listen(settings.port, function () {
-  console.log('http server listening on port', settings.port);
+  logger.info('http server listening on port', settings.port);
+});
+
+server.on('error', (err) => {
+  if (err.code && err.code === 'EADDRINUSE') {
+    logger.error(`Port ${settings.port} seems to be in use already. Make sure the sonos-http-api isn't 
+    already running, or that no other server uses that port. You can specify an alternative http port 
+    with property "port" in settings.json`);
+  } else {
+    logger.error(err);
+  }
+
+  process.exit(1);
 });
 
 
