@@ -1,6 +1,8 @@
-[![PayPal donate button](https://img.shields.io/badge/paypal-donate-yellow.svg)](https://www.paypal.me/jishi "Donate once-off to this project using Paypal")
+[![PayPal donate button](https://img.shields.io/badge/paypal-donate-yellow.svg)](https://www.paypal.me/jishi "Donate once-off to this project using Paypal") [![Join the chat at gitter](https://img.shields.io/gitter/room/badges/shields.svg)](https://gitter.im/node-sonos-http-api/Lobby "Need assistance? Join the chat at Gitter.im") 
 
-Feel free to use it as you please. Consider donating if you want to support further development.
+Feel free to use it as you please. Consider donating if you want to support further development. Reach out on the gitter chat if you have issues getting it to run, instead of creating new issues, thank you!
+
+If you are also looking for cloud control (ifttt, public webhooks etc), see the [bronos-client](http://www.bronos.net) project! That pi image also contain an installation of this http-api.  
 
 SONOS HTTP API
 ==============
@@ -95,6 +97,11 @@ The actions supported as of today:
 * linein (only analog linein, not PLAYBAR yet)
 * clip (announce custom mp3 clip)
 * clipall
+* join / leave  (Grouping actions)
+* sub (on/off/gain/crossover/polarity) See SUB section for more info
+* nightmode (on/off, PLAYBAR only)
+* speechenhancement (on/off, PLAYBAR only)
+
 
 State
 -----
@@ -135,22 +142,26 @@ Example of a state json:
 Queue
 -----
 Obtain the current queue list from a specified player. The request will accept:
- - No parameters
+ - limit (optional)
+ - offset (optional, requires limit)
+ - detailed flag (optional, include uri in response)
 
-	`http://localhost:5005/living room/queue`
+	    http://localhost:5005/living room/queue
+	    http://localhost:5005/living room/queue/10 (only return top 10)
+	    http://localhost:5005/living room/queue/10/10 (return result 11-20)
+	    http://localhost:5005/living room/queue/detailed
+	    http://localhost:5005/living room/queue/10/detailed
 
 Example queue response:
 ```
 [
     {
-      "uri": "x-sonos-spotify:spotify%3atrack%3a0AvV49z4EPz5ocYN7eKGAK?sid=9&flags=8224&sn=3",
       "albumArtURI": "/getaa?s=1&u=x-sonos-spotify%3aspotify%253atrack%253a0AvV49z4EPz5ocYN7eKGAK%3fsid%3d9%26flags%3d8224%26sn%3d3",
       "title": "No Diggity",
       "artist": "Blackstreet",
       "album": "Another Level"
     },
     {
-      "uri": "x-sonos-spotify:spotify%3atrack%3a5OQGeJ1ceykovrykZsGhqL?sid=9&flags=8224&sn=3",
       "albumArtURI": "/getaa?s=1&u=x-sonos-spotify%3aspotify%253atrack%253a5OQGeJ1ceykovrykZsGhqL%3fsid%3d9%26flags%3d8224%26sn%3d3",
       "title": "Breathless",
       "artist": "The Corrs",
@@ -246,7 +257,7 @@ In the example, there is one preset called `all`, which you can apply by invokin
 presets folder
 --------------
 
-You can create a preset files in the presets folder with pre made presets, called presets.json. It will be loaded upon start, any changes made to files in this folder (addition, removal, modification) will trigger a reload of your presets.
+You can create a preset files in the presets folder with pre made presets. It will be loaded upon start, any changes made to files in this folder (addition, removal, modification) will trigger a reload of your presets. The name of the file (xxxxxx.json) will become the name of the preset. It will be parsed as JSON5, to be more forgiving of typos. See http://json5.org/ for more info.
 
 Example content:
 
@@ -289,7 +300,7 @@ There is an example.json bundled with this repo. The name of the file will becom
 settings.json
 -------------
 
-If you want to change default settings, you can create a settings.json file and put in the root folder.
+If you want to change default settings, you can create a settings.json file and put in the root folder. This will be parsed as JSON5, to be more forgiving. See http://json5.org/ for more info.
 
 Available options are:
 
@@ -327,14 +338,22 @@ Example:
 	    "username": "your-pandora-account-email-address",
 	    "password": "your-pandora-password"
 	  },
-	  "library": { 
-	    "randomQueueLimit": 50 
-	  } 
+	  "spotify": {
+	    "clientId": "your-spotify-application-clientId",
+	    "clientSecret": "your-spotify-application-clientSecret"
+	  },
+	  "library": {
+	    "randomQueueLimit": 50
+	  }
 	}
 ```
 
 Override as it suits you.
 
+Note for Spotify users!
+-----------------------
+
+To use Spotify, go to https://developer.spotify.com/my-applications/#!/applications/create and create a Spotify application to get your client keys. You can name it Sonos or anything else and you don't have to change any values. Use the Client ID and the Client Secret values in the settings.json file as indicated above.
 
 
 Favorites
@@ -644,7 +663,7 @@ Optional parameter is line-in from another player. Examples:
 `/Office/linein`
 Selects line-in on zone Office belongs to, with source Office.
 
-`Office/linein/TV Room`
+`/Office/linein/TV%20Room`
 Selects line-in for zone Office belongs to, with source TV Room.
 
 If you want to to isolate a player and then select line-in, use the `/Office/leave` first.
@@ -659,17 +678,49 @@ Like "Say" but instead of a phrase, reference a custom track from the `static/cl
 
 Examples:
 
-    clipall/sample_clip.mp3
-    clipall/sample_clip.mp3/80
+    /clipall/sample_clip.mp3
+    /clipall/sample_clip.mp3/80
     /Office/clip/sample_clip.mp3
     /Office/clip/sample_clip.mp3/30
 
 *Pro-tip: announce your arrival with an epic theme song!*
 
+Grouping
+--------
+
+You have basic grouping capabilities. `join` will join the selected player to the specified group (specify group by addressing any of the players in that group):
+
+`/Kitchen/join/Office`
+This will join the Kitchen player to the group that Office currently belong to.
+
+`/Kitchen/leave`
+Kitchen will leave any group it was part of and become a standalone player.
+
+You don't have to ungroup a player in order to join it to another group, just join it to the new group and it will jump accordingly.
+
+SUB
+---
+
+SUB actions include the following:
+`/TV%20Room/sub/off`
+Turn off sub
+
+`/TV%20Room/sub/on`
+Turn on sub
+
+`/TV%20Room/sub/gain/3`
+Adjust gain, -15 to 15. You can make bigger adjustments, but I'm limiting it for now because it might damage the SUB.
+
+`/TV%20Room/sub/crossover/90`
+adjust crossover frequency in hz. Official values are 50 through 110 in increments of 10. Use other values at your own risk! My SUB gave a loud bang and shut down when setting this to high, and I thought I broke it. However, a restart woke it up again.
+
+`/TV%20Room/sub/polarity/1`
+Switch "placement adjustment" or more commonly known as phase. 0 = 0°, 1 = 180°
+
 Spotify and Apple Music (Experimental)
 ----------------------
 
-Allows you to perform your own external searches for Apple Music or Spotify songs or albums and play a specified song or track ID. The Music Search funtionality outlined further below performs a search of its own and plays the specified music. 
+Allows you to perform your own external searches for Apple Music or Spotify songs or albums and play a specified song or track ID. The Music Search funtionality outlined further below performs a search of its own and plays the specified music.
 
 The following endpoints are available:
 
@@ -687,7 +738,7 @@ The following endpoints are available:
 You can find Apple Music song and album IDs via the [iTunes Search
 API](https://affiliate.itunes.apple.com/resources/documentation/itunes-store-web-service-search-api/).
 
-It only handles a single spotify account currently. It will probably use the first account added on your system. 
+It only handles a single spotify account currently. It will probably use the first account added on your system.
 
 
 SiriusXM
@@ -701,14 +752,14 @@ You can specify a SiriusXM channel number or station name and the station will b
 
 Pandora
 ----------------------
-Perform a search for one of your Pandora stations and begin playing. Give the currently playing song a thumbs up or thumbs down. Requires a valid Pandora account and credentials. 
+Perform a search for one of your Pandora stations and begin playing. Give the currently playing song a thumbs up or thumbs down. Requires a valid Pandora account and credentials.
 
 The following endpoints are available:
 
 ```
 /RoomName/pandora/play/{station name}     Plays the closest match to the specified station name in your list of Pandora stations
 /RoomName/pandora/thumbsup                Gives the current playing Pandora song a thumbs up
-/RoomName/pandora/thumbsdown              Gives the current playing Pandora song a thumbs down 
+/RoomName/pandora/thumbsdown              Gives the current playing Pandora song a thumbs down
 ```
 
 Your Pandora credentials need to be added to the settings.json file
@@ -719,11 +770,22 @@ Your Pandora credentials need to be added to the settings.json file
             "password": "your-pandora-password"
           }
   ```
- 
+
+
+Tunein
+----------------------
+Given a station id this will play the streaming broadcast via the tunein service. You can find tunein station ids via services like [radiotime](http://opml.radiotime.com/)
+
+The following endpoint is available:
+
+```
+/RoomName/tunein/play/{station id}
+```
+
 
 Music Search and Play
 ----------------------
-Perform a search for a song, artist, album or station and begin playing. Supports Apple Music, Spotify, Deezer, Deezer Elite, and your local Music Library. 
+Perform a search for a song, artist, album or station and begin playing. Supports Apple Music, Spotify, Deezer, Deezer Elite, and your local Music Library.
 
 The following endpoint is available:
 
@@ -732,13 +794,13 @@ The following endpoint is available:
 
 Service options: apple, spotify, deezer, elite, library
 
-Type options for apple, spotify, deezer, and elite: album, song, station 
-Station plays a Pandora like artist radio station for a specified artist name. 
+Type options for apple, spotify, deezer, and elite: album, song, station, playlist
+Station plays a Pandora like artist radio station for a specified artist name.
 Apple Music also supports song titles and artist name + song title.
 
-Type options for library: album, song, load 
-Load performs an initial load or relaod of the local Sonos music library. 
-The music library will also get loaded the first time that the library service is 
+Type options for library: album, song, load
+Load performs an initial load or relaod of the local Sonos music library.
+The music library will also get loaded the first time that the library service is
 used if the load command has not been issued before.
 
 Search terms for song for all services: artist name, song title, artist name + song title
@@ -749,8 +811,8 @@ Search terms for station for spotify and deezer: artist name
 Search terms for station for library: not supported
 
 Specifying just an artist name will load the queue with up to 50 of the artist's most popular songs
-Specifying a song title or artist + song title will insert the closest match to the song into 
-the queue and start playing it. More than 50 tracks can be loaded from the local library by using 
+Specifying a song title or artist + song title will insert the closest match to the song into
+the queue and start playing it. More than 50 tracks can be loaded from the local library by using
 library.randomQueueLimit in the settings.json file to set the maximum to a higher value.
 
 Examples:
@@ -761,6 +823,9 @@ Examples:
 /Den/musicsearch/spotify/album/abbey+road
 /Playroom/musicsearch/library/album/red+hot+chili+peppers+the+getaway
 /Kitchen/musicsearch/spotify/album/dark+necessities
+
+/Kitchen/musicsearch/spotify/playlist/morning+acoustic
+/Kitchen/musicsearch/spotify/playlist/dinner+with+friends
 
 /Den/musicsearch/spotify/station/red+hot+chili+peppers
 /Kitchen/musicsearch/apple/station/dark+necessities  (Only Apple Music supports song titles)
@@ -834,3 +899,26 @@ DOCKER
 -----
 
 Docker usage is maintained by [Chris Nesbitt-Smith](https://github.com/chrisns) at [chrisns/docker-node-sonos-http-api](https://github.com/chrisns/docker-node-sonos-http-api)
+
+## FIREWALL
+
+If you are running this in an environment where you manually have to unblock traffic to and from the machine, the following traffic needs to be allowed:
+
+### Incoming
+```
+TCP, port 3500 (Sonos events)
+UDP, port 1905 (Sonos initial discovery)
+TCP, port 5005 (if using the default api port)
+TCP, port 5006 (if using https support, optional)
+```
+### Outgoing
+```
+TCP, port 1400 (Sonos control commands)
+UDP, port 1900 (Sonos initial discovery)
+TCP, whatever port used for webhooks (optional)
+TCP, port 80/443 (for looking up hig res cover arts on various music services)
+```
+
+The UDP traffic is a mixture of multicast (outgoing), broadcast (outgoing) and unicast (incoming). The multicast address is 239.255.255.250, the broadcast is 255.255.255.255 and the unicast is from the Sonos players.
+
+If port 3500 is occupied while trying to bind it, it will try using 3501, 3502, 3503 etc. You would need to adjust your firewall rules accordingly, if running multiple instances of this software, or any other software utilizing these ports. 
