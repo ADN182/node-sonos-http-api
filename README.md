@@ -2,7 +2,7 @@
 
 Feel free to use it as you please. Consider donating if you want to support further development. Reach out on the gitter chat if you have issues getting it to run, instead of creating new issues, thank you!
 
-If you are also looking for cloud control (ifttt, public webhooks etc), see the [bronos-client](http://www.bronos.net) project! That pi image also contain an installation of this http-api.  
+If you are also looking for cloud control (ifttt, public webhooks etc), see the [bronos-client](http://www.bronos.net) project! That pi image also contains an installation of this http-api.  
 
 SONOS HTTP API
 ==============
@@ -91,16 +91,19 @@ The actions supported as of today:
 * resumeall (will resume the ones that was pause on the pauseall call. Useful for doorbell, phone calls, etc. Optional timeout)
 * say
 * sayall
+* saypreset
 * queue
 * clearqueue
 * sleep (values in seconds)
 * linein (only analog linein, not PLAYBAR yet)
 * clip (announce custom mp3 clip)
 * clipall
+* clippreset
 * join / leave  (Grouping actions)
 * sub (on/off/gain/crossover/polarity) See SUB section for more info
 * nightmode (on/off, PLAYBAR only)
 * speechenhancement (on/off, PLAYBAR only)
+* bass/treble (use -10 thru 10 as value. 0 is neutral)
 
 
 State
@@ -136,7 +139,12 @@ Example of a state json:
 	    "shuffle":true,
 	    "repeat":false,
 	    "crossfade":false
-	  }
+	  },
+	  "equalizer": {
+        "bass": 0,
+        "treble": 0,
+        "loudness": true
+      }
 	}
 
 Queue
@@ -305,6 +313,7 @@ If you want to change default settings, you can create a settings.json file and 
 Available options are:
 
 * port: change the listening port
+* ip: change the listening IP
 * https: use https which requires a key and certificate or pfx file
 * auth: require basic auth credentials which requires a username and password
 * announceVolume: the percentual volume use when invoking say/sayall without any volume parameter
@@ -320,6 +329,7 @@ Example:
 	    "name": "ZiraRUS"
 	  },
 	  "port": 5005,
+	  "ip": "0.0.0.0",
 	  "securePort": 5006,
 	  "https": {
 	    "key": "/path/to/key.pem",
@@ -384,6 +394,7 @@ Experimental support for TTS. Today the following providers are available:
 * Microsoft Cognitive Services (Bing Text to Speech API)
 * AWS Polly
 * Google (default)
+* macOS say command
 
 It will use the one you configure in settings.json. If you define settings for multiple TTS services, it will not be guaranteed which one it will choose!
 
@@ -654,6 +665,53 @@ Action is:
 	/[Room name]/say/[phrase][/[language_code]][/[announce volume]]
 	/sayall/[phrase][/[language_code]][/[announce volume]]
 
+#### macOS say command
+On macOS the "say" command can be used for text to speech. If your installation runs on macOS you can activate the system TTS by giving an empty configuration:
+
+```json
+{
+  "macSay": {}
+}
+```
+
+Or you can provide a default voice and a speech rate:
+
+```json
+{
+  "macSay": {
+  	"voice" : "Alex",
+  	"rate": 90
+  }
+}
+```
+
+Action is:
+
+	/[Room name]/say/[phrase][/[voice]][/[announce volume]]
+	/sayall/[phrase][/[voice]][/[announce volume]]
+
+Example:
+
+	/Office/say/Hello, dinner is ready
+	/Office/say/Hello, dinner is ready/Agnes
+	/Office/say/Guten morgen/Anna
+	/sayall/Hello, dinner is ready
+	/Office/say/Hello, dinner is ready/90
+	/Office/say/Guten morgen/Anna/90
+
+Supported voices are:
+
+Alex, Alice, Alva, Amelie, Anna, Carmit, Damayanti, Daniel, Diego, Ellen, Fiona, Fred, Ioana, Joana, Jorge, Juan, Kanya, Karen, Kyoko, Laura, Lekha, Luca, Luciana, Maged, Mariska, Mei-Jia, Melina, Milena, Moira, Monica, Nora, Paulina, Samantha, Sara, Satu, Sin-ji, Tessa, Thomas, Ting-Ting, Veena, Victoria, Xander, Yelda, Yuna, Yuri, Zosia, Zuzana
+
+A list of available voices can be printed by this command:
+```
+   say -v '?'
+```
+
+See also https://gist.github.com/mculp/4b95752e25c456d425c6 and https://stackoverflow.com/questions/1489800/getting-list-of-mac-text-to-speech-voices-programmatically
+
+To download more voices go to: System Preferences -> Accessibility -> Speech -> System Voice
+
 Line-in
 -------
 
@@ -717,7 +775,7 @@ adjust crossover frequency in hz. Official values are 50 through 110 in incremen
 `/TV%20Room/sub/polarity/1`
 Switch "placement adjustment" or more commonly known as phase. 0 = 0°, 1 = 180°
 
-Spotify and Apple Music (Experimental)
+Spotify, Apple Music and Amazon Music (Experimental)
 ----------------------
 
 Allows you to perform your own external searches for Apple Music or Spotify songs or albums and play a specified song or track ID. The Music Search funtionality outlined further below performs a search of its own and plays the specified music.
@@ -733,12 +791,40 @@ The following endpoints are available:
 # Apple Music
 /RoomName/applemusic/{now,next,queue}/song:{songID}
 /RoomName/applemusic/{now,next,queue}/album:{albumID}
+
+# Amazon Music
+/RoomName/amazonmusic/{now,next,queue}/song:{songID}
+/RoomName/amazonmusic/{now,next,queue}/album:{albumID}
 ```
 
-You can find Apple Music song and album IDs via the [iTunes Search
+It only handles a single **spotify** account currently. It will probably use the first account added on your system.
+
+You can find **Apple Music** song and album IDs via the [iTunes Search
 API](https://affiliate.itunes.apple.com/resources/documentation/itunes-store-web-service-search-api/).
 
-It only handles a single spotify account currently. It will probably use the first account added on your system.
+You can also use iTunes to figure out song and album IDs. Right click on a song or album and select "Share" -> "Copy Link". You can do this when you searched within Apple Music or from your media library as long as the song is available in Apple Music.
+
+Have a look at the link you just copied. 
+
+*If you shared the link to a song:*
+The format is: https://itunes.apple.com/de/album/{songName}/{albumID}?i={songID}
+> eg: https://itunes.apple.com/de/album/blood-of-my-enemies/355363490?i=355364259
+
+*If you shared the link to an album:*
+The format is: https://itunes.apple.com/de/album/{albumName}/{albumID}
+> eg: https://itunes.apple.com/de/album/f-g-restless/355363490
+
+To find **Amazon Music** song and album IDs you can use the Amazon Music App, search for a song or an album and share a link.
+
+Look at the link you just shared. This works with Amazon Music Prime as well as with Amazon Music Prime which is included in your Amazon Prime membership. 
+
+*If you shared the link to a song:*
+The format is: https://music.amazon.de/albums/{albumID}?trackAsin={songID}&ref=dm_sh_d74d-4daa-dmcp-63cb-e8747&musicTerritory=DE&marketplaceId=A1PA6795UKMFR9
+> eg: https://music.amazon.de/albums/B0727SH7LW?trackAsin=B071918VCR&ref=dm_sh_d74d-4daa-dmcp-63cb-e8747&musicTerritory=DE&marketplaceId=A1PA6795UKMFR9
+
+*If you shared the link to an album:*
+The format is: https://music.amazon.de/albums/{albumID}?ref=dm_sh_97aa-255b-dmcp-c6ba-4ff00&musicTerritory=DE&marketplaceId=A1PA6795UKMFR9
+> eg: https://music.amazon.de/albums/B0727SH7LW?ref=dm_sh_97aa-255b-dmcp-c6ba-4ff00&musicTerritory=DE&marketplaceId=A1PA6795UKMFR9
 
 
 SiriusXM
@@ -774,14 +860,24 @@ Your Pandora credentials need to be added to the settings.json file
 
 Tunein
 ----------------------
-Given a station id this will play the streaming broadcast via the tunein service. You can find tunein station ids via services like [radiotime](http://opml.radiotime.com/)
+Given a station id this will play or set the streaming broadcast via the tunein service. You can find tunein station ids via services like [radiotime](http://opml.radiotime.com/)
 
 The following endpoint is available:
 
 ```
 /RoomName/tunein/play/{station id}
+Will set and start playing given Station id
+
+/RoomName/tunein/set/{station id}
+Will set without start playing given Station id
 ```
 
+For example to play Radio 6 Music - [tunein.com/radio/s44491](https://tunein.com/radio/s44491)
+
+```
+/RoomName/tunein/play/44491
+note the droping of the 's' in 's44491'
+```
 
 Music Search and Play
 ----------------------
@@ -922,3 +1018,31 @@ TCP, port 80/443 (for looking up hig res cover arts on various music services)
 The UDP traffic is a mixture of multicast (outgoing), broadcast (outgoing) and unicast (incoming). The multicast address is 239.255.255.250, the broadcast is 255.255.255.255 and the unicast is from the Sonos players.
 
 If port 3500 is occupied while trying to bind it, it will try using 3501, 3502, 3503 etc. You would need to adjust your firewall rules accordingly, if running multiple instances of this software, or any other software utilizing these ports. 
+
+### Projects built with this API
+
+**Alexa For Sonos (Alexa Skills)**
+
+Amazon Alexa voice layer on top of the amazing NodeJS component
+https://github.com/hypermoose/AlexaForSonos
+
+**JukeBot (Ruby)**
+
+A Slack bot that can control a Sonos instance. Custom spotify integration to find music.
+https://github.com/estiens/jukebot
+
+**Sonos Controller (JS / Electron)**
+
+A Sonos controller, built with the Electron framework.
+https://github.com/anton-christensen/sonos-controller
+
+**Sonos Cron (PHP)**
+
+Service for retrieving commands from an AWS SQS queue and passing them to an instance of the Sonos HTTP API 
+https://github.com/cjrpaterson/sonos-cron
+
+**Sonos Push Server (JS)**
+
+A Node server to receive notifications from node-sonos-http-api and push them via socket.io to the clients. 
+https://github.com/TimoKorinth/sonos-push-server
+
